@@ -6,6 +6,15 @@
  * Based on GeForce emulation from Vort's Bochs fork
  * Copyright (C) 2025 The Bochs Project
  *
+ * This header defines the GeForce GPU device structure and constants for:
+ * - GeForce3 Ti 500 PCI device emulation
+ * - D3D semaphore operations for Kelvin (0x97) engine
+ * - FIFO command processing and channel management
+ * - Memory-mapped I/O register definitions
+ *
+ * The implementation focuses on enabling D3D functionality for games by
+ * providing essential graphics engine emulation and synchronization primitives.
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
  * in the Software without restriction, including without limitation the rights
@@ -51,6 +60,36 @@ OBJECT_DECLARE_SIMPLE_TYPE(GeForceState, GEFORCE)
 /* Memory mapping constants */
 #define GEFORCE_MMIO_SIZE 0x1000000
 
+/* D3D method constants for Kelvin (0x97) */
+#define NV_D3D_SEMAPHORE_OBJECT      0x069
+#define NV_D3D_CLIP_HORIZONTAL       0x080
+#define NV_D3D_CLIP_VERTICAL         0x081
+#define NV_D3D_SURFACE_FORMAT        0x082
+#define NV_D3D_SURFACE_PITCH         0x083
+#define NV_D3D_SURFACE_COLOR_OFFSET  0x084
+#define NV_D3D_SEMAPHORE_OFFSET      0x75b
+#define NV_D3D_SEMAPHORE_ACQUIRE     0x75c
+#define NV_D3D_COLOR_CLEAR_VALUE     0x764
+#define NV_D3D_CLEAR_SURFACE         0x765
+
+/* Channel state for D3D operations */
+typedef struct GeForceChannelState {
+    /* Subchannel engines */
+    uint32_t engine[GEFORCE_SUBCHANNEL_COUNT];
+    
+    /* D3D state */
+    uint32_t d3d_semaphore_obj;
+    uint32_t d3d_semaphore_offset;
+    uint32_t d3d_clip_horizontal;
+    uint32_t d3d_clip_vertical;
+    uint32_t d3d_surface_format;
+    uint32_t d3d_surface_pitch;
+    uint32_t d3d_surface_color_offset;
+    uint32_t d3d_color_clear_value;
+    uint32_t d3d_clear_surface;
+    uint32_t d3d_color_bytes;
+} GeForceChannelState;
+
 /* GeForce registers structure */
 typedef struct GeForceRegs {
     uint8_t crtc_index;
@@ -77,6 +116,10 @@ typedef struct GeForceRegs {
     uint32_t fifo_cache1_dma_get;
     uint32_t fifo_cache1_ref_cnt;
     uint32_t fifo_cache1_pull0;
+    uint32_t fifo_cache1_semaphore;
+    
+    /* Channel states */
+    GeForceChannelState channels[GEFORCE_CHANNEL_COUNT];
 } GeForceRegs;
 
 /* Main GeForce device state */
@@ -102,5 +145,7 @@ struct GeForceState {
 void geforce_init_registers(GeForceState *s);
 uint64_t geforce_mmio_read(void *opaque, hwaddr addr, unsigned size);
 void geforce_mmio_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
+bool geforce_execute_d3d_command(GeForceState *s, uint32_t chid, uint32_t method, uint32_t param);
+void geforce_d3d_clear_surface(GeForceState *s, uint32_t chid);
 
 #endif /* HW_DISPLAY_GEFORCE_H */

@@ -145,6 +145,13 @@ sii9022_switch_mode(const char *mode) "mode: %s"
 ati_mm_read(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 " %s -> 0x%"PRIx64
 ati_mm_write(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 " %s <- 0x%"PRIx64
 
+# geforce.c
+geforce_mmio_read(uint64_t addr, uint32_t val) "read addr=0x%"PRIx64": 0x%x"
+geforce_mmio_write(uint64_t addr, uint32_t val) "write addr=0x%"PRIx64": 0x%x"
+geforce_d3d_command(uint32_t chid, uint32_t method, uint32_t param) "ch=%d method=0x%x param=0x%x"
+geforce_d3d_semaphore(uint32_t obj, uint32_t offset, uint32_t value) "obj=0x%x offset=0x%x value=0x%x"
+geforce_irq_update(uint32_t mc_intr, int level) "mc_intr=0x%x level=%d"
+
 # artist.c
 artist_reg_read(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 "%s -> 0x%08"PRIx64
 artist_reg_write(unsigned int size, uint64_t addr, const char *name, uint64_t val) "%u 0x%"PRIx64 "%s <- 0x%08"PRIx64
