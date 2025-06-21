@@ -39,7 +39,8 @@ system_ss.add(when: 'CONFIG_DM163', if_true: files('dm163.c'))
 if (config_all_devices.has_key('CONFIG_VGA_CIRRUS') or
     config_all_devices.has_key('CONFIG_VGA_PCI') or
     config_all_devices.has_key('CONFIG_VMWARE_VGA') or
-    config_all_devices.has_key('CONFIG_ATI_VGA')
+    config_all_devices.has_key('CONFIG_ATI_VGA') or
+    config_all_devices.has_key('CONFIG_GEFORCE')
    )
   system_ss.add(when: 'CONFIG_ACPI', if_true: files('acpi-vga.c'),
                                       if_false: files('acpi-vga-stub.c'))
@@ -60,6 +61,8 @@ system_ss.add(when: 'CONFIG_XLNX_DISPLAYPORT', if_true: files('xlnx_dp.c'))
 system_ss.add(when: 'CONFIG_ARTIST', if_true: files('artist.c'))
 
 system_ss.add(when: 'CONFIG_ATI_VGA', if_true: [files('ati.c', 'ati_2d.c', 'ati_dbg.c'), pixman])
+
+system_ss.add(when: 'CONFIG_GEFORCE', if_true: files('geforce.c'))
 
 system_ss.add(when: [pvg, 'CONFIG_MAC_PVG_PCI'],     if_true: [files('apple-gfx.m', 'apple-gfx-pci.m')])
 system_ss.add(when: [pvg, 'CONFIG_MAC_PVG_MMIO'],    if_true: [files('apple-gfx.m', 'apple-gfx-mmio.m')])
