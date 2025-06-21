@@ -134,6 +134,47 @@ static void geforce_dma_write32(GeForceState *s, uint32_t object, uint32_t offse
     }
 }
 
+/* RAMIN (Instance Memory) access functions */
+uint64_t geforce_ramin_read(void *opaque, hwaddr addr, unsigned size)
+{
+    GeForceState *s = GEFORCE(opaque);
+    uint64_t val = 0;
+    
+    /* RAMIN is instance memory used for GPU objects and context */
+    if (addr < s->ramin_size) {
+        /* Access the end of VRAM where RAMIN is mapped */
+        hwaddr ramin_offset = s->vga.vram_size - s->ramin_size + addr;
+        if (size == 4 && ramin_offset + 4 <= s->vga.vram_size) {
+            val = *(uint32_t*)(s->vga.vram_ptr + ramin_offset);
+        } else if (size == 1 && ramin_offset < s->vga.vram_size) {
+            val = *(uint8_t*)(s->vga.vram_ptr + ramin_offset);
+        }
+    }
+    
+    DPRINTF("RAMIN read addr=0x%lx size=%d val=0x%lx\n", addr, size, val);
+    trace_geforce_ramin_read(addr, size, val);
+    return val;
+}
+
+void geforce_ramin_write(void *opaque, hwaddr addr, uint64_t val, unsigned size)
+{
+    GeForceState *s = GEFORCE(opaque);
+    
+    DPRINTF("RAMIN write addr=0x%lx size=%d val=0x%lx\n", addr, size, val);
+    trace_geforce_ramin_write(addr, size, val);
+    
+    /* RAMIN is instance memory used for GPU objects and context */
+    if (addr < s->ramin_size) {
+        /* Access the end of VRAM where RAMIN is mapped */
+        hwaddr ramin_offset = s->vga.vram_size - s->ramin_size + addr;
+        if (size == 4 && ramin_offset + 4 <= s->vga.vram_size) {
+            *(uint32_t*)(s->vga.vram_ptr + ramin_offset) = val;
+        } else if (size == 1 && ramin_offset < s->vga.vram_size) {
+            *(uint8_t*)(s->vga.vram_ptr + ramin_offset) = val;
+        }
+    }
+}
+
 bool geforce_execute_d3d_command(GeForceState *s, uint32_t chid, uint32_t method, uint32_t param)
 {
     if (chid >= GEFORCE_CHANNEL_COUNT) {
@@ -204,6 +245,71 @@ bool geforce_execute_d3d_command(GeForceState *s, uint32_t chid, uint32_t method
         
     default:
         return false; /* Unknown method */
+    }
+    
+    return true;
+}
+
+bool geforce_execute_engine_command(GeForceState *s, uint32_t chid, uint32_t subchannel,
+                                   uint32_t engine_class, uint32_t method, uint32_t param)
+{
+    if (chid >= GEFORCE_CHANNEL_COUNT || subchannel >= GEFORCE_SUBCHANNEL_COUNT) {
+        return false;
+    }
+    
+    GeForceChannelState *ch = &s->regs.channels[chid];
+    
+    DPRINTF("Engine command: ch=%d subch=%d class=0x%02x method=0x%03x param=0x%08x\n",
+            chid, subchannel, engine_class, method, param);
+    trace_geforce_engine_command(chid, subchannel, engine_class, method, param);
+    
+    switch (engine_class) {
+    case NV_ENGINE_KELVIN:
+        /* Kelvin 3D engine - D3D commands */
+        return geforce_execute_d3d_command(s, chid, method, param);
+        
+    case NV_ENGINE_SURF2D:
+        /* 2D surface engine */
+        switch (method) {
+        case 0x102:  /* Surface format */
+            ch->surf2d_format = param;
+            break;
+        case 0x103:  /* Surface pitch */
+            ch->surf2d_pitch = param;
+            break;
+        case 0x104:  /* Source offset */
+            ch->surf2d_offset_source = param;
+            break;
+        case 0x105:  /* Dest offset */
+            ch->surf2d_offset_dest = param;
+            break;
+        default:
+            DPRINTF("Unknown SURF2D method 0x%03x\n", method);
+            return false;
+        }
+        break;
+        
+    case NV_ENGINE_GDI:
+        /* GDI rectangle engine */
+        DPRINTF("GDI engine method 0x%03x = 0x%08x\n", method, param);
+        /* Basic GDI operations would be implemented here */
+        break;
+        
+    case NV_ENGINE_M2MF:
+        /* Memory-to-memory copy engine */
+        DPRINTF("M2MF engine method 0x%03x = 0x%08x\n", method, param);
+        /* Memory copy operations would be implemented here */
+        break;
+        
+    case NV_ENGINE_IFC:
+        /* Image from CPU engine */
+        DPRINTF("IFC engine method 0x%03x = 0x%08x\n", method, param);
+        /* CPU to video memory image transfer would be implemented here */
+        break;
+        
+    default:
+        DPRINTF("Unknown engine class 0x%02x\n", engine_class);
+        return false;
     }
     
     return true;
@@ -408,6 +514,10 @@ static void geforce_register_write(GeForceState *s, uint32_t addr, uint32_t val)
                 /* In a real implementation, we would parse the command buffer */
                 /* For now, just indicate D3D capability is available */
                 DPRINTF("Channel %d ready for D3D commands (Kelvin 0x97)\n", chid);
+                
+                /* Example: Execute a D3D command to demonstrate functionality */
+                /* This would normally come from FIFO command parsing */
+                geforce_execute_engine_command(s, chid, 0, NV_ENGINE_KELVIN, 0x069, 0x12345678);
             }
         }
         break;
@@ -496,6 +606,16 @@ static const MemoryRegionOps geforce_mmio_ops = {
     },
 };
 
+static const MemoryRegionOps geforce_ramin_ops = {
+    .read = geforce_ramin_read,
+    .write = geforce_ramin_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = {
+        .min_access_size = 1,
+        .max_access_size = 4,
+    },
+};
+
 void geforce_init_registers(GeForceState *s)
 {
     /* Initialize registers to default values */
@@ -533,6 +653,10 @@ static void geforce_realize(PCIDevice *pci_dev, Error **errp)
         return;
     }
     
+    /* Set up memory sizes */
+    s->vram_size = s->vga.vram_size;
+    s->ramin_size = 0x10000;  /* 64KB RAMIN at end of VRAM */
+    
     /* Set up PCI configuration */
     pci_dev->config[PCI_REVISION_ID] = 0xa1; /* GeForce3 Ti 500 revision */
     pci_dev->config[PCI_CLASS_PROG] = 0x00;
@@ -542,10 +666,14 @@ static void geforce_realize(PCIDevice *pci_dev, Error **errp)
     memory_region_init_io(&s->mmio, OBJECT(dev), &geforce_mmio_ops, s,
                           "geforce-mmio", GEFORCE_MMIO_SIZE);
     
+    memory_region_init_io(&s->ramin, OBJECT(dev), &geforce_ramin_ops, s,
+                          "geforce-ramin", s->ramin_size);
+    
     /* Register PCI BARs */
     pci_register_bar(pci_dev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->mmio);
     pci_register_bar(pci_dev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_PREFETCH,
                      &s->vga.vram);
+    pci_register_bar(pci_dev, 2, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->ramin);
     
     /* Initialize registers */
     geforce_init_registers(s);

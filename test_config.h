@@ -1,1 +1,0 @@
-#define CONFIG_GEFORCE 1

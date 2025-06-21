@@ -72,10 +72,19 @@ OBJECT_DECLARE_SIMPLE_TYPE(GeForceState, GEFORCE)
 #define NV_D3D_COLOR_CLEAR_VALUE     0x764
 #define NV_D3D_CLEAR_SURFACE         0x765
 
+/* GPU Engine class IDs */
+#define NV_ENGINE_SW            0x0000  /* Software object */
+#define NV_ENGINE_GDI           0x004a  /* GDI rectangle */
+#define NV_ENGINE_M2MF          0x0039  /* Memory-to-memory copy */
+#define NV_ENGINE_SURF2D        0x0062  /* 2D surface */
+#define NV_ENGINE_IFC           0x0061  /* Image from CPU */
+#define NV_ENGINE_KELVIN        0x0097  /* D3D/3D engine (GeForce3) */
+
 /* Channel state for D3D operations */
 typedef struct GeForceChannelState {
     /* Subchannel engines */
     uint32_t engine[GEFORCE_SUBCHANNEL_COUNT];
+    uint32_t object[GEFORCE_SUBCHANNEL_COUNT];
     
     /* D3D state */
     uint32_t d3d_semaphore_obj;
@@ -88,6 +97,12 @@ typedef struct GeForceChannelState {
     uint32_t d3d_color_clear_value;
     uint32_t d3d_clear_surface;
     uint32_t d3d_color_bytes;
+    
+    /* 2D state */
+    uint32_t surf2d_format;
+    uint32_t surf2d_pitch;
+    uint32_t surf2d_offset_source;
+    uint32_t surf2d_offset_dest;
 } GeForceChannelState;
 
 /* GeForce registers structure */
@@ -132,6 +147,11 @@ struct GeForceState {
     /* Memory regions */
     MemoryRegion mmio;
     MemoryRegion vram;
+    MemoryRegion ramin;  /* RAMIN - instance memory */
+    
+    /* Memory layout */
+    uint32_t vram_size;
+    uint32_t ramin_size;
     
     /* Device model */
     char *model;
@@ -147,5 +167,11 @@ uint64_t geforce_mmio_read(void *opaque, hwaddr addr, unsigned size);
 void geforce_mmio_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
 bool geforce_execute_d3d_command(GeForceState *s, uint32_t chid, uint32_t method, uint32_t param);
 void geforce_d3d_clear_surface(GeForceState *s, uint32_t chid);
+bool geforce_execute_engine_command(GeForceState *s, uint32_t chid, uint32_t subchannel, 
+                                   uint32_t engine_class, uint32_t method, uint32_t param);
+
+/* RAMIN access functions */
+uint64_t geforce_ramin_read(void *opaque, hwaddr addr, unsigned size);
+void geforce_ramin_write(void *opaque, hwaddr addr, uint64_t val, unsigned size);
 
 #endif /* HW_DISPLAY_GEFORCE_H */
