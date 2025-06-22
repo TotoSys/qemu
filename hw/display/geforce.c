@@ -88,13 +88,6 @@
 #define NV_CRTC_INDEX_COLOR     0x3d4
 #define NV_CRTC_DATA_COLOR      0x3d5
 
-static const struct {
-    const char *name;
-    uint16_t device_id;
-} geforce_models[] = {
-    { "geforce3", PCI_DEVICE_ID_NVIDIA_GEFORCE3_TI500 },
-};
-
 static void geforce_update_irq(GeForceState *s)
 {
     uint32_t mc_intr = 0;
@@ -115,15 +108,6 @@ static void geforce_update_irq(GeForceState *s)
 }
 
 /* D3D semaphore operations for Kelvin (0x97) */
-static uint32_t geforce_dma_read32(GeForceState *s, uint32_t object, uint32_t offset)
-{
-    /* Simplified DMA read - in real implementation would access memory through DMA */
-    hwaddr addr = (hwaddr)object + offset;
-    if (addr < s->vga.vram_size) {
-        return *(uint32_t*)(s->vga.vram_ptr + addr);
-    }
-    return 0;
-}
 
 static void geforce_dma_write32(GeForceState *s, uint32_t object, uint32_t offset, uint32_t value)
 {
@@ -323,6 +307,10 @@ void geforce_d3d_clear_surface(GeForceState *s, uint32_t chid)
     uint32_t offset = ch->d3d_surface_color_offset;
     uint32_t pitch = ch->d3d_surface_pitch;
     uint32_t clear_value = ch->d3d_color_clear_value;
+    
+    (void)offset;    /* Mark as used to avoid compiler warning */
+    (void)pitch;     /* Mark as used to avoid compiler warning */
+    (void)clear_value; /* Mark as used to avoid compiler warning */
     
     DPRINTF("Clearing D3D surface: offset=0x%08x, pitch=%d, value=0x%08x\n",
             offset, pitch, clear_value);
@@ -679,7 +667,7 @@ static void geforce_realize(PCIDevice *pci_dev, Error **errp)
     geforce_init_registers(s);
     
     /* Set up VGA console */
-    s->vga.con = graphic_console_init(dev, 0, &s->vga.hw_ops, s);
+    s->vga.con = graphic_console_init(dev, 0, s->vga.hw_ops, s);
     
     DPRINTF("Device realized\n");
 }
@@ -693,13 +681,12 @@ static void geforce_exit(PCIDevice *pci_dev)
     DPRINTF("Device exit\n");
 }
 
-static Property geforce_properties[] = {
+static const Property geforce_properties[] = {
     DEFINE_PROP_UINT32("vgamem_mb", GeForceState, vga.vram_size_mb, 64),
     DEFINE_PROP_STRING("model", GeForceState, model),
-    DEFINE_PROP_END_OF_LIST(),
 };
 
-static void geforce_class_init(ObjectClass *klass, void *data)
+static void geforce_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
@@ -712,7 +699,7 @@ static void geforce_class_init(ObjectClass *klass, void *data)
     k->subsystem_vendor_id = PCI_VENDOR_ID_NVIDIA;
     k->subsystem_id = PCI_DEVICE_ID_NVIDIA_GEFORCE3_TI500;
     
-    dc->reset = geforce_reset;
+    device_class_set_legacy_reset(dc, geforce_reset);
     dc->desc = "NVIDIA GeForce GPU";
     device_class_set_props(dc, geforce_properties);
     set_bit(DEVICE_CATEGORY_DISPLAY, dc->categories);
