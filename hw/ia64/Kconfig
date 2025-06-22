@@ -2,7 +2,7 @@ config IA64_MACHINE
     bool
     depends on IA64
     select PCI
-    select PIIX3
+    select PIIX
     select MC146818RTC
     select SERIAL_ISA
     select FDC_ISA

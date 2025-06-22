@@ -38,6 +38,7 @@
 #include "target/ia64/cpu.h"
 #include "hw/ia64/ia64_chipset.h"
 #include "hw/isa/isa.h"
+#include "hw/southbridge/piix.h"
 
 #define IA64_MAX_CPUS 64
 
@@ -53,11 +54,7 @@ static void ia64_machine_init(MachineState *machine)
     MemoryRegion *system_memory = get_system_memory();
     MemoryRegion *ram = g_new(MemoryRegion, 1);
     MemoryRegion *firmware = g_new(MemoryRegion, 1);
-    MemoryRegion *pci_memory = g_new(MemoryRegion, 1);
-    MemoryRegion *pci_io = g_new(MemoryRegion, 1);
     PCIBus *pci_bus;
-    DeviceState *i82460gx_dev;
-    DeviceState *isa_dev;
     int i;
 
     /* Create CPUs */
@@ -84,26 +81,12 @@ static void ia64_machine_init(MachineState *machine)
                            &error_fatal);
     memory_region_add_subregion(system_memory, IA64_FIRMWARE_BASE, firmware);
 
-    /* PCI memory space */
-    memory_region_init(pci_memory, NULL, "pci-memory", 256 * MiB);
-    memory_region_add_subregion(system_memory, IA64_PCI_MEM_BASE, pci_memory);
+    /* Create a simple PCI bus for now */
+    pci_bus = pci_bus_new(NULL, "pci", get_system_memory(), get_system_io(), 0, TYPE_PCI_BUS);
 
-    /* PCI I/O space */
-    memory_region_init(pci_io, NULL, "pci-io", 16 * MiB);
-    memory_region_add_subregion(system_memory, IA64_PCI_IO_BASE, pci_io);
-
-    /* Create Intel 82460GX chipset */
-    i82460gx_dev = qdev_new(TYPE_I82460GX_HOST_BRIDGE);
-    qdev_prop_set_uint32(i82460gx_dev, "ram-size", machine->ram_size / MiB);
-    pci_bus = IA64_I82460GX_HOST_BRIDGE(i82460gx_dev)->pci_bus;
-    sysbus_realize_and_unref(SYS_BUS_DEVICE(i82460gx_dev), &error_fatal);
-
-    /* ISA bridge and devices */
-    isa_dev = DEVICE(pci_create_simple(pci_bus, PCI_DEVFN(7, 0), "piix3-ide"));
-
-    /* Create ISA devices */
-    /* Create ISA bus from PCI-ISA bridge */
-    ISABus *isa_bus = ISA_BUS(qdev_get_child_bus(isa_dev, "isa.0"));
+    /* ISA bridge - just create a simple ISA bus for now */
+    ISABus *isa_bus = isa_bus_new(NULL, get_system_memory(), get_system_io(),
+                                   &error_fatal);
 
     /* Timer */
     i8254_pit_init(isa_bus, 0x40, 0, NULL);
